@@ -59,8 +59,9 @@ def enforce_limits(position, x_min, x_max):
     return position*(~np.logical_or(maskl, masku)) + x_min*maskl + x_max*masku
 
 
-def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=200, threads=1, communication=0.75,
+def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=500, threads=1, communication=0.75,
          mutation_rate=0.4, dynamic_mutation_rate=False, mutation_rate_max=0.7, mutation_rate_min=0.01, tau=5,
+         max_it_without_change=40, tolerance=0.1,
          *args, **kwargs):
     """
 
@@ -79,6 +80,10 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=200, threads=1, co
             Defaults to 5
         mutation_rate_min(Optional[float]): maximum mutation rate, used in :py:func:`update_mutation_rate`. Defaults to 0.7
         mutation_rate_max(Optional[float]): minimum mutation rate, used in :py:func:`update_mutation_rate`. Defaults to 0.01
+        tolerance (Optional[float]): difference between the current global best fitness and the new best found, if the difference is larger than
+            the tolerance --> `max_it_without_change` is reseted
+        max_it_without_change (Optional[int]): defines maximum acceptable number of iterations without change in the fitness function, after
+            this value the optimization stops - stopping criteria
         *args: variable length argument list, to be used in the fitness function
         **kwargs: Arbitrary keyword arguments, to be used in the fitness function
 
@@ -92,7 +97,7 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=200, threads=1, co
     """
 
     assert len(x_min) == len(x_max), 'Lower- and upper-bounds must be the same length'
-    assert np.all(x_max > x_min), 'All upper-bound values must be greater than lower-bound values'
+    assert np.all(x_max >= x_min), 'All upper-bound values must be greater than lower-bound values'
 
     fitness_function = partial(_wrap_fitness, fitness_fun, args, kwargs)
 
@@ -141,8 +146,9 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=200, threads=1, co
 
     # Iterate until termination criterion met ##################################
     it = 0
+    it_without_change = 0
 
-    while it <= maxiter:
+    while (it <= maxiter) and (it_without_change <= max_it_without_change):
 
         if dynamic_mutation_rate:
             mutation_rate = update_mutation_rate(iter_=it, itermax=maxiter, mmax=mutation_rate_max, mmin=mutation_rate_min, tau=tau)
@@ -183,14 +189,28 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=200, threads=1, co
         # Update swarm's best position
         i_min = np.argmin(best_fitness)
         if best_fitness[i_min] < best_global_fit:
+            if abs(best_fitness[i_min] - best_global_fit) > tolerance:
+                it_without_change = 0
+            else:
+                it_without_change += 1
             best_global_fit = best_fitness[i_min]
             best_global_pos = best_pos[i_min, :].copy()
+        else:
+            it_without_change += 1
 
-        print(round(best_global_fit, 2))
+        if it % 10 == 0:
+            print('iter: {}, best fit: {}'.format(it, -round(best_global_fit, 2)))
         it += 1
 
-    print(best_global_fit)
-    print(best_global_pos)
+    if it >= maxiter:
+        print('Maximum number of iterations reached! \n')
+    elif it_without_change >= max_it_without_change:
+        print('Maximum number of iterations without change reached! \n')
+
+    # print(best_global_fit)
+    # print(best_global_pos)
+
+    mp_pool.close()
 
     return best_global_fit, best_global_pos
 
