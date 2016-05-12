@@ -1,9 +1,9 @@
 from distutils.core import setup
 
 setup(
-    name='epso',
-    version='1.1',
-    packages=['epso'],
+    name='metaheuristics',
+    version='1.5',
+    packages=['epso', 'genetic_algorithm'],
     url='',
     license='',
     author='jmfilipe',
