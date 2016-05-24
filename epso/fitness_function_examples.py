@@ -1,5 +1,6 @@
 """
-This file has a set of
+This file has a set of fitness functions that could be used to attest epso performance
+
 """
 
 import math

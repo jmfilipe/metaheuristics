@@ -42,6 +42,22 @@ def update_mutation_rate(iter_, itermax, itermin=0, mmax=0.7, mmin=0.01, tau=5):
 
 
 def calc_velocity(position, velocity, weights, best_pos, best_global_pos, communication):
+    """
+    Calculates the new velocity for the particle, using the new found weights.
+
+    Args:
+        position (ndarray): current position of the particle
+        velocity (ndarray): previous velocity
+        weights (ndarray): wheights (inertia, memory, cooperation and target
+        best_pos (ndarray): best position of each particle
+        best_global_pos (ndarray): best global position
+        communication (float): communication factor, so the probability of the particle using the information of
+         the best global position
+
+    Returns:
+        (ndarray)
+
+    """
 
     r_gbest = np.random.normal(size=position.shape)
     r_commu = np.random.uniform(size=position.shape) < communication
@@ -53,6 +69,18 @@ def calc_velocity(position, velocity, weights, best_pos, best_global_pos, commun
 
 
 def enforce_limits(position, x_min, x_max):
+    """
+    Checks if the particle's position is outside its boundaries and if necessary corrects it.
+
+    Args:
+        position (ndarray): current position
+        x_min (ndarray): lower bound
+        x_max (ndarray): upper bound
+
+    Returns:
+        (ndarray)
+
+    """
     maskl = position < x_min
     masku = position > x_max
 
@@ -101,7 +129,11 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=500, threads=1, co
 
     fitness_function = partial(_wrap_fitness, fitness_fun, args, kwargs)
 
-    mp_pool = multiprocessing.Pool(threads)
+    if threads > 1:
+        pool = multiprocessing.Pool(threads)
+        mp_pool = pool.map
+    else:
+        mp_pool = map
 
     dim = len(x_max)
 
@@ -124,7 +156,7 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=500, threads=1, co
     best_global_fit = np.inf  # fg
 
     # Calculate objective and constraints for each particle
-    fitness = np.array(mp_pool.map(fitness_function, position))
+    fitness = np.array(list(mp_pool(fitness_function, position)))
     # fitness = fitness_function(position[0, :])
 
     i_update = np.array(fitness < best_fitness)
@@ -168,8 +200,8 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=500, threads=1, co
         position_child = enforce_limits(position_child, x_min, x_max)
 
         # fitness evaluation
-        fitness = np.array(mp_pool.map(fitness_function, position))
-        fitness_child = np.array(mp_pool.map(fitness_function, position_child))
+        fitness = np.array(list(mp_pool(fitness_function, position)))
+        fitness_child = np.array(list(mp_pool(fitness_function, position_child)))
 
         # idx selects the particle whose parent achieved a better results than the child
         idx = np.array(fitness_child < fitness)
@@ -199,18 +231,13 @@ def epso(pop, x_min, x_max, fitness_fun, x_init=None, maxiter=500, threads=1, co
             it_without_change += 1
 
         if it % 10 == 0:
-            print('iter: {}, best fit: {}'.format(it, -round(best_global_fit, 2)))
+            print('iter: {}, best fit: {}'.format(it, round(best_global_fit, 2)))
         it += 1
 
     if it >= maxiter:
         print('Maximum number of iterations reached! \n')
     elif it_without_change >= max_it_without_change:
         print('Maximum number of iterations without change reached! \n')
-
-    # print(best_global_fit)
-    # print(best_global_pos)
-
-    mp_pool.close()
 
     return best_global_fit, best_global_pos
 
